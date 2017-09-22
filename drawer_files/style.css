@@ -1,0 +1,50 @@
+body {
+  background: #EEE;
+  overflow:hidden;
+  font-family: "Lucida Console", Monaco, monospace;
+}
+
+canvas, p{
+  background: #FFF;
+  cursor: pointer;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.canvas-container {
+  height: 8px;
+  width: 200px;
+  margin-left: auto;
+  margin-right: auto;
+  background: #000;
+}
+
+.canvas-container div {
+	width: 20%;
+	height: 4px;
+	float:left;
+	margin: 0;
+	padding: 0;
+}
+
+.canvas-container div:nth-child(1) {
+	background: #921AFF;
+	height: 8px;
+}
+
+.canvas-container div:nth-child(2) {
+	background: #FF2D47;
+}
+
+.canvas-container div:nth-child(3) {
+	background: #F5D349;
+}
+
+.canvas-container div:nth-child(4) {
+	background: #4D5DE8;
+	height: 8px;
+}
+
+.canvas-container div:nth-child(5) {
+	background: #34D865;
+}
