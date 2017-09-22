@@ -686,3 +686,16 @@ function roundToNearest(numToRound, numToRoundTo) {
     numToRoundTo = 1 / (numToRoundTo);
     return Math.round(numToRound * numToRoundTo) / numToRoundTo;
 }
+
+draw();
+
+const socket = new WebSocket('ws://localhost:3001');
+// Connection opened
+socket.addEventListener('open', function (event) {
+    socket.send(JSON.stringify({msg:'something'}));
+});
+
+// Listen for messages
+socket.addEventListener('message', function (event) {
+    console.log('Message from server ', JSON.parse(event.data));
+});
