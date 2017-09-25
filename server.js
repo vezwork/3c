@@ -3,7 +3,7 @@ const http      = require('http'),
       fs        = require('fs')
 
 
-http.createServer((request, response) => 
+const server = http.createServer((request, response) => 
 {
     const pagePath = request.url.substring(1) || 'drawer.html'
 
@@ -59,7 +59,7 @@ const world = new World()
 
 const WebSocket = require('ws')
 
-const wss = new WebSocket.Server({ port: 3001 })
+const wss = new WebSocket.Server({ server })
 
 const actionHandlers = {
     place: data => world.placePoint(data.point),
