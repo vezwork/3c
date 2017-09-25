@@ -1,0 +1,27 @@
+{
+  "name": "3d",
+  "version": "1.0.0",
+  "description": "3d drawing points",
+  "main": "server.js",
+  "dependencies": {
+    "ws": "^3.2.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vezwork/3c.git"
+  },
+  "author": "vez",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/vezwork/3c/issues"
+  },
+  "homepage": "https://github.com/vezwork/3c#readme",
+  "engines": {
+    "node": "6.10.3"
+  }
+}
