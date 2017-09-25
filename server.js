@@ -14,8 +14,7 @@ const server = http.createServer((request, response) =>
         let fileStream = fs.createReadStream(pagePath);
         response.writeHead(200, {'Content-Type': 'text/html'})
         if (pagePath === 'drawer.html')
-            response.write('<div id="data-port">' + (process.env.PORT || 3000) + '</div>')
-        console.log('<div id="data-port">' + (process.env.PORT || 3000) + '</div>')
+            response.write('<div id="data-port">ws://' + request.headers.host + ':' + (process.env.PORT || 3000) + '</div>')
         fileStream.pipe(response)
     }
     else 
