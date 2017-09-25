@@ -20,10 +20,7 @@ const server = http.createServer((request, response) =>
         response.writeHead(404)
         response.end()
     }
-}).listen(process.env.PORT || 3000)
-
-console.log('server listening')
-
+})
 
 //=====================================================================
 //World code
@@ -81,6 +78,10 @@ wss.on('connection', function connection(ws)
 
     ws.send(JSON.stringify(world))
 })
+
+server.listen(process.env.PORT || 3000, function listening() {
+    console.log('Listening on %d', server.address().port);
+  })
 
 function worldUpdateLoop() {
     wss.clients.forEach(function each(client) {

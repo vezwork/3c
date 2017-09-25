@@ -5,7 +5,7 @@ class SocketWorld
         this.vertices = []
         this.edges = []
 
-        this._socket = new WebSocket('ws://localhost:3001')
+        this._socket = new WebSocket('ws://localhost:3000')
 
         this._socket.addEventListener('open', event => {
             console.log('socket connected')
