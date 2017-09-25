@@ -13,6 +13,9 @@ const server = http.createServer((request, response) =>
     {
         let fileStream = fs.createReadStream(pagePath);
         response.writeHead(200, {'Content-Type': 'text/html'})
+        if (pagePath === 'drawer.html')
+            response.write('<div id="data-port">' + (process.env.PORT || 3000) + '</div>')
+        console.log('<div id="data-port">' + (process.env.PORT || 3000) + '</div>')
         fileStream.pipe(response)
     }
     else 
@@ -20,6 +23,9 @@ const server = http.createServer((request, response) =>
         response.writeHead(404)
         response.end()
     }
+})
+server.listen(process.env.PORT || 3000, function listening() {
+    console.log('Listening on %d', server.address().port);
 })
 
 //=====================================================================
@@ -78,10 +84,6 @@ wss.on('connection', function connection(ws)
 
     ws.send(JSON.stringify(world))
 })
-
-server.listen(process.env.PORT || 3000, function listening() {
-    console.log('Listening on %d', server.address().port);
-  })
 
 function worldUpdateLoop() {
     wss.clients.forEach(function each(client) {
