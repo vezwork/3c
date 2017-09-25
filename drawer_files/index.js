@@ -1,701 +1,492 @@
 //TODO: add faces and shading, pre-processing auto intersection correction, the drawing stack, objects
 
-//TODO DAY 2: camera plane line cutting, faces / planes, live render intersection?, camera_rot_y+z
-//add_object(), docs, movement acceleration, max draw distance, x-y-z coordinate lines, horizon gradient
+//TODO DAY 2: movement acceleration, max draw distance, x-y-z coordinate lines, horizon gradient
 
-//todo 2017: add project point function and then add right-click-drag preview and placed point connection preview
+const canvas = document.getElementById('canvas')
+const ctx = canvas.getContext('2d')
 
-//modify these vars for interesting results!
-var vertices = [
-  [-1,-1,-1],
-  [-1,-1,1],
-  [-1,1,-1],
-  [-1,1,1],
-  [1,-1,-1],
-  [1,-1,1],
-  [1,1,-1],
-  [1,1,1],
-  [3,3,3],
-  [4,4.1,3.3],
-  
-  [-1,-1,16],
-  [-1,-1,18],
-  [-1,1,16],
-  [-1,1,18],
-  [1,-1,16],
-  [1,-1,18],
-  [1,1,16],
-  [1,1,18],
-  
-  [1, 0, 17]
-];
-var edges = [
-  [0,1],
-  [1,3],
-  [3,2],
-  [2,0],
-  [4,5],
-  [5,7],
-  [7,6],
-  [6,4],
-  [0,4],
-  [1,5],
-  [2,6],
-  [3,7],
-  [0,8],
-  [8,9],
-  
-  [10,11],
-  [11,13],
-  [13,12],
-  [12,10],
-  [14,15],
-  [15,17],
-  [17,16],
-  [16,14],
-  [10,14],
-  [11,15],
-  [12,16],
-  [13,17],
-  
-  [6,16],
-  [3,13],
-];
-var centermostVertex = {
+const world = new SocketWorld()
+const input = new Input(canvas)
+input.tryMouseLock(true)
+
+const camera = {
+    horizontalZoom: 500,	//artificial zooms
+    verticalZoom: 500,
+    offset: {
+        x: canvas.width/2,
+        y: canvas.height/2
+    },
+    position: {
+        x:0,
+        y:0,
+        z:10
+    },
+    rot: {
+        x: 0,
+        y: Math.PI
+    }
+}
+
+const config = {
+    vertex_radius: 60,
+    edge_width: 1,
+    vertex_color: "rgba(255,155,0,1)",
+    edge_color: "rgba(50,20,75,1)"
+}
+
+const centermostVertex = {
     index: null,
     distToCenter: 1000000,
     pointRadius: null,
     x: null,
-    y: null
+    y: null //ADD: 3d distance to camera
 }
-var canvas = document.getElementById('canvas');
-var ctx = canvas.getContext('2d');
-
-var horizontal_zoom = 500;	//artificial zooms
-var vertical_zoom = 500;
-var horizontal_offset = canvas.width/2; //camera center
-var vertical_offset = canvas.height/2;
-var vertex_radius = 60;	//edge and vertex draw preferences.
-var edge_width = 1;
-var vertex_color = "rgba(255,155,0,1)";
-var edge_color = "rgba(50,20,75,1)"; // not working
-
-var camera_z = 10;
-var camera_x = 0;
-var camera_y = 0;
-
-var camera_rot_x = 0;
-var camera_rot_y = Math.PI;		
-
-var dragVertex = null;
-var pointPlaceDistance = 5;
-
-var mouse_x = 0;
-var mouse_y = 0;
-
-var gridOn = false;
-var gridScale = 0.25;
-
-var storedData = JSON.parse(localStorage.getItem("world"));
-if (storedData) {
-    vertices = storedData.vertices,
-    edges = storedData.edges
-}
-
-canvas.addEventListener("contextmenu",function(e){e.preventDefault()});
-
-canvas.addEventListener("mousedown",function(e){
-    if (e.button == 2) {
-        if (centermostVertex.pointRadius > 2) {
-            dragVertex = centermostVertex.index;
-        }
-    } else if (e.button === 1) {
-        vertices.splice(centermostVertex.index, 1, []); 
-    } else {
-        canvas.requestPointerLock();
-        
-
-        var cx = pointPlaceDistance * Math.sin(camera_rot_y+Math.PI) * Math.sin(Math.PI*2/4+camera_rot_x);
-        var cy = pointPlaceDistance * Math.cos(Math.PI*2/4+camera_rot_x);
-        var cz = pointPlaceDistance * Math.cos(camera_rot_y+Math.PI) * Math.sin(Math.PI*2/4+camera_rot_x);
-        if (gridOn) {
-            vertices.push([roundToNearest(camera_x+cx, gridScale), roundToNearest(-camera_y+cy, gridScale), roundToNearest(camera_z+cz, gridScale)]);
-        } else {
-            vertices.push([camera_x+cx, -camera_y+cy, camera_z+cz]);
-        }
-    }
-    localStorage.setItem('world', JSON.stringify({
-        vertices: vertices,
-        edges: edges
-    }));
-});
-
-canvas.addEventListener("mouseup",function(e){
-    if (e.button == 2) {
-        if (dragVertex && centermostVertex.pointRadius > 2) {
-            edges.push([dragVertex, centermostVertex.index]);
-        } 
-        dragVertex = null;
-    }
-    localStorage.setItem('world', JSON.stringify({
-        vertices: vertices,
-        edges: edges
-    }));
-});
-function getMousePos(canvas, evt) {
-    var rect = canvas.getBoundingClientRect();
-    return {
-        x: evt.clientX - rect.left,
-        y: evt.clientY - rect.top
-    };
-    }
-canvas.addEventListener('mousemove', function(e) {
-    var mousePos = getMousePos(canvas, e);
-
-    var mouse_x_prev = mouse_x;
-    var mouse_y_prev = mouse_y;
-
-    mouse_x = mousePos.x;
-    mouse_y = mousePos.y;
-
-    var xshift = e.movementX/300;
-    var yshift = e.movementY/300;
-
-    camera_rot_y -= xshift;
-    camera_rot_x -= yshift;
-    if (camera_rot_x > Math.PI/2) {
-        camera_rot_x = Math.PI/2;
-    } else if (camera_rot_x < -Math.PI/2) {
-        camera_rot_x = -Math.PI/2;
-    }
-});
-
-function draw() {
-    var reqanim;
-    
-    ctx_draw();
-    
-    function ctx_draw() {
-      ctx.clearRect(0,0, canvas.width, canvas.height);
-	  //ctx.fillStyle = 'rgba(255,255,255,0.6)';
-	  //ctx.fillRect(0,0,canvas.width,canvas.height); //motion blur
-      
-      ctx.strokeStyle = edge_color;
-      ctx.lineWidth = edge_width;
-      for (var j = 0; j < edges.length; j++) {
-        var edge_start = vertices[edges[j][0]];
-        var edge_end = vertices[edges[j][1]];
-		drawLineBetweenPoints(edge_start, edge_end);
-		
-      }
-
-      ctx.fillStyle = vertex_color;
-      for (var i = 0; i < vertices.length; i++) {
-        drawPoint(vertices[i], i);
-
-        //draw reticle grid
-        if (gridOn) {
-            var base = [roundToNearest(vertices[i][0], gridScale), roundToNearest(vertices[i][1], gridScale), roundToNearest(vertices[i][2], gridScale)];
-            drawGrid(base, gridScale*2, gridScale);
-        }
-      }
-
-      ctx.strokeStyle = edge_color;
-      ctx.fillStyle = vertex_color;
-      ctx.lineWidth = edge_width;
-      keyHandler();
-      selectorCircleHandler();
-      reqanim = window.requestAnimationFrame(ctx_draw);
-    }  
-}
-
-var selectorCircle = {
+const selectorCircle = {
     x:canvas.width/2,
     y:canvas.height/2,
     radius: 100,
     opacity: 1
 }
+let dragVertex = null
+let pointPlaceDistance = 5
+let movementSpeed = 0.06
+let gridOn = false
+let gridScale = 0.25
 
-function selectorCircleHandler() {
-    var circleRadius = 100;
+function engineLoop() 
+{
+    handleControls()
+    drawWorld()
+    drawUI()
+
+    centermostVertex.distToCenter = 1000000
+    requestAnimationFrame(engineLoop)
+}
+engineLoop()
+
+function handleControls() 
+{
+    if (input.buttonPressed('right')) {
+        if (centermostVertex.pointRadius > 2) {
+            dragVertex = centermostVertex.index
+        }
+    }
+    if (input.buttonPressed('middle')) {
+        world.deletePoint(centermostVertex.index)
+    }
+    if (input.buttonPressed('left')) {
+        var cx = pointPlaceDistance * Math.sin(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x);
+        var cy = pointPlaceDistance * Math.cos(Math.PI*2/4+camera.rot.x);
+        var cz = pointPlaceDistance * Math.cos(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x);
+
+        if (gridOn) {
+            world.placePoint({
+                x: roundToNearest(camera.position.x+cx, gridScale),
+                y: roundToNearest(-camera.position.y+cy, gridScale),
+                z: roundToNearest(camera.position.z+cz, gridScale)
+            })
+        } else {
+            world.placePoint({
+                x: camera.position.x+cx, gridScale,
+                y: -camera.position.y+cy, gridScale,
+                z: camera.position.z+cz, gridScale
+            })
+        }
+    }
+    if (input.buttonReleased('right')) {
+        if (dragVertex && centermostVertex.pointRadius > 2) {
+            world.connectPoints([dragVertex, centermostVertex.index])
+        } 
+        dragVertex = null;
+    }
+
+    if (input.mouse.locked) {
+        camera.rot.x -= input.mouse.move.y/300
+        camera.rot.y -= input.mouse.move.x/300
+    }
+
+    if (camera.rot.x > Math.PI/2) {
+        camera.rot.x = Math.PI/2
+    } else if (camera.rot.x < -Math.PI/2) {
+        camera.rot.x = -Math.PI/2
+    }
+
+    //keyboard input
+    var sinTheta = Math.sin(camera.rot.y)
+	var cosTheta = Math.cos(camera.rot.y)
+    
+    if (input.keyDown('shift')) {
+        if (input.keyDown('up') || input.keyDown('w')) {
+            camera.position.z -= movementSpeed
+        }
+        if (input.keyDown('down') || input.keyDown('s')) {
+            camera.position.z += movementSpeed
+        }
+        if (input.keyDown('left') || input.keyDown('a')) {
+            camera.position.x += movementSpeed
+        }
+        if (input.keyDown('right') || input.keyDown('d')) {
+            camera.position.x -= movementSpeed
+        }
+        if (input.scroll > 0) {
+            gridScale *= 2
+        } else if (input.scroll < 0) {
+            gridScale *= 0.5
+        }
+    } else {
+        if (input.keyDown('up') || input.keyDown('w')) {
+            camera.position.x -= sinTheta * movementSpeed
+            camera.position.z -= cosTheta * movementSpeed
+        }
+        if (input.keyDown('down') || input.keyDown('s')) {
+            camera.position.x += sinTheta * movementSpeed
+            camera.position.z += cosTheta * movementSpeed
+        }
+        if (input.keyDown('left') || input.keyDown('a')) {
+            camera.position.z += sinTheta * movementSpeed
+            camera.position.x -= cosTheta * movementSpeed
+        }
+        if (input.keyDown('right') || input.keyDown('d')) {
+            camera.position.z -= sinTheta * movementSpeed
+            camera.position.x += cosTheta * movementSpeed
+        }
+        if (gridOn) {
+            pointPlaceDistance += input.scroll * gridScale
+        } else {
+            pointPlaceDistance += input.scroll / 10
+        }
+    }
+
+    if (input.keyPressed('g')) {
+        gridOn = !gridOn
+    }
+	
+	if (input.keyDown('e')) {
+        camera.position.y += movementSpeed
+    }
+    if (input.keyDown('q')) {
+        camera.position.y -= movementSpeed
+    }
+
+    camera.horizontalZoom = Math.max(500, pointPlaceDistance * 50)	//artificial zooms
+    camera.verticalZoom = Math.max(500, pointPlaceDistance * 50)
+
+    input.frameReset()
+}
+
+function drawWorld() 
+{
+    ctx.clearRect(0,0, canvas.width, canvas.height);
+    
+    ctx.strokeStyle = config.edge_color
+    ctx.lineWidth = config.edge_width
+    for (var j = 0; j < world.edges.length; j++) {
+        var edge_start = world.vertices[world.edges[j][0]]
+        var edge_end = world.vertices[world.edges[j][1]]
+        drawLineBetweenPoints(edge_start, edge_end)
+    }
+
+    ctx.fillStyle = config.vertex_color;
+    for (var i = 0; i < world.vertices.length; i++) {
+        drawPoint(world.vertices[i], i)
+        //draw reticle grid
+        if (gridOn) {
+            var base = {
+                x: roundToNearest(world.vertices[i].x, gridScale),
+                y: roundToNearest(world.vertices[i].y, gridScale),
+                z: roundToNearest(world.vertices[i].z, gridScale)
+            }
+            drawGrid(base, gridScale*2, gridScale)
+        }
+    }
+}
+
+function drawUI()
+{
+    var circleRadius = 100
 
     //interpolate selector-snap circle
     if (centermostVertex.distToCenter < 100 && centermostVertex.pointRadius > 2) {
         //draw increased size vertex
-        ctx.beginPath();
-        ctx.arc(centermostVertex.x, centermostVertex.y, centermostVertex.pointRadius+10, 0, Math.PI*2, true);
-        ctx.fill();
+        ctx.beginPath()
+        ctx.arc(centermostVertex.x, centermostVertex.y, centermostVertex.pointRadius+10, 0, Math.PI*2, true)
+        ctx.fill()
 
-        selectorCircle.x -= (selectorCircle.x - centermostVertex.x) * 0.2;
-        selectorCircle.y -= (selectorCircle.y - centermostVertex.y) * 0.2;
-        selectorCircle.radius -= (selectorCircle.radius - (centermostVertex.pointRadius + 13)) * 0.1;
-        selectorCircle.opacity -= (selectorCircle.opacity - 1) * 0.1;
+        selectorCircle.x -= (selectorCircle.x - centermostVertex.x) * 0.2
+        selectorCircle.y -= (selectorCircle.y - centermostVertex.y) * 0.2
+        selectorCircle.radius -= (selectorCircle.radius - (centermostVertex.pointRadius + 13)) * 0.1
+        selectorCircle.opacity -= (selectorCircle.opacity - 1) * 0.1
     } else {
-        selectorCircle.x -= (selectorCircle.x - canvas.width/2) * 0.1;
-        selectorCircle.y -= (selectorCircle.y - canvas.height/2) * 0.1;
-        selectorCircle.radius -= (selectorCircle.radius - 100) * 0.1;
-        selectorCircle.opacity -= (selectorCircle.opacity - 0.1) * 0.1;
+        selectorCircle.x -= (selectorCircle.x - canvas.width/2) * 0.1
+        selectorCircle.y -= (selectorCircle.y - canvas.height/2) * 0.1
+        selectorCircle.radius -= (selectorCircle.radius - 100) * 0.1
+        selectorCircle.opacity -= (selectorCircle.opacity - 0.1) * 0.1
     }
 
     //draw connector for dragVertex
-    var cx = pointPlaceDistance * Math.sin(camera_rot_y+Math.PI) * Math.sin(Math.PI*2/4+camera_rot_x);
-    var cy = pointPlaceDistance * Math.cos(Math.PI*2/4+camera_rot_x);
-    var cz = pointPlaceDistance * Math.cos(camera_rot_y+Math.PI) * Math.sin(Math.PI*2/4+camera_rot_x);
+    var cx = pointPlaceDistance * Math.sin(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x)
+    var cy = pointPlaceDistance * Math.cos(Math.PI*2/4+camera.rot.x)
+    var cz = pointPlaceDistance * Math.cos(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x)
+
+    var newPoint
     if (gridOn) {
-        var newPoint = [roundToNearest(camera_x+cx, gridScale), roundToNearest(-camera_y+cy, gridScale), roundToNearest(camera_z+cz, gridScale)];
+        newPoint = {
+            x: roundToNearest(camera.position.x+cx, gridScale),
+            y: roundToNearest(-camera.position.y+cy, gridScale),
+            z: roundToNearest(camera.position.z+cz, gridScale)
+        }
     } else {
-        var newPoint = [camera_x+cx, -camera_y+cy, camera_z+cz];
+        newPoint = {
+            x: camera.position.x+cx, gridScale,
+            y: -camera.position.y+cy, gridScale,
+            z: camera.position.z+cz, gridScale
+        }
     }
 
     if (dragVertex) {
         if (centermostVertex.distToCenter < 100 && centermostVertex.pointRadius > 2) {
-            drawLineBetweenPoints(vertices[dragVertex], vertices[centermostVertex.index]);
+            drawLineBetweenPoints(world.vertices[dragVertex], world.vertices[centermostVertex.index])
         } else {
-            drawLineBetweenPoints(vertices[dragVertex], newPoint);
+            drawLineBetweenPoints(world.vertices[dragVertex], newPoint)
         }
     }
 
     //draw selector-snap circle
-    ctx.beginPath();
-    ctx.globalAlpha = selectorCircle.opacity;
-    ctx.arc(selectorCircle.x,selectorCircle.y,selectorCircle.radius,0,2*Math.PI);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    ctx.beginPath()
+    ctx.globalAlpha = selectorCircle.opacity
+    ctx.arc(selectorCircle.x,selectorCircle.y,selectorCircle.radius,0,2*Math.PI)
+    ctx.stroke()
+    ctx.globalAlpha = 1
 
     //draw reticle
-    var pointRadius = vertex_radius/pointPlaceDistance/2;
+    var pointRadius = config.vertex_radius/pointPlaceDistance/2
 
-    ctx.beginPath();
-    ctx.moveTo(canvas.width/2-pointRadius,canvas.height/2);
-    ctx.lineTo(canvas.width/2+pointRadius,canvas.height/2);
-    ctx.moveTo(canvas.width/2,canvas.height/2-pointRadius);
-    ctx.lineTo(canvas.width/2,canvas.height/2+pointRadius);
-    ctx.stroke();
+    ctx.beginPath()
+    ctx.moveTo(canvas.width/2-pointRadius,canvas.height/2)
+    ctx.lineTo(canvas.width/2+pointRadius,canvas.height/2)
+    ctx.moveTo(canvas.width/2,canvas.height/2-pointRadius)
+    ctx.lineTo(canvas.width/2,canvas.height/2+pointRadius)
+    ctx.stroke()
 
     //draw reticle grid
     if (gridOn) {
-        drawGrid(newPoint, gridScale*2, gridScale);
+        drawGrid(newPoint, gridScale*2, gridScale)
     }
 
+    ctx.strokeStyle = config.edge_color
+    ctx.lineWidth = config.edge_width
     //draw placement distance text
-    ctx.strokeText(pointPlaceDistance.toPrecision(3), canvas.width/2+3, canvas.height/2-3);
+    ctx.strokeText(pointPlaceDistance.toPrecision(3), canvas.width/2+3, canvas.height/2-3)
 
     //draw gridscale text
-    if (shift_pressed) {
-        ctx.strokeStyle = 'red';
-        ctx.strokeText(gridScale.toPrecision(5), canvas.width/2+3, canvas.height/2+9);
+    if (input.keyDown('shift')) {
+        ctx.strokeStyle = 'red'
+        ctx.strokeText(gridScale.toPrecision(5), canvas.width/2+3, canvas.height/2+9)
     }
-    
-    centermostVertex.distToCenter = 10000000;
 }
 
 function drawGrid(point, gridSize, gridScale) {
     ctx.strokeStyle = '#444';
     ctx.lineWidth = 0.1;
-    var base = [point[0]-gridSize/2, point[1]-gridSize/2, point[2]-gridSize/2]
+    var zeroCorner = { 
+        x: point.x - gridSize/2,
+        y: point.y - gridSize/2,
+        z: point.z - gridSize/2
+    }
     for (var i = 0; i < gridSize+gridScale; i+=gridScale) {
         for (var k = 0; k < gridSize+gridScale; k+=gridScale) {
-            drawLineBetweenPoints([base[0]+i, base[1], base[2]+k], [base[0]+i, base[1]+gridSize, base[2]+k]);
+            drawLineBetweenPoints(
+                { x: zeroCorner.x+i, y: zeroCorner.y, z: zeroCorner.z+k }, 
+                { x: zeroCorner.x+i, y: zeroCorner.y+gridSize, z: zeroCorner.z+k }
+            )
         }
         for (var k = 0; k < gridSize+gridScale; k+=gridScale) {
-            drawLineBetweenPoints([base[0], base[1]+k, base[2]+i], [base[0]+gridSize, base[1]+k, base[2]+i]);
+            drawLineBetweenPoints(
+                { x: zeroCorner.x, y: zeroCorner.y+k, z: zeroCorner.z+i }, 
+                { x: zeroCorner.x+gridSize, y: zeroCorner.y+k, z: zeroCorner.z+i }
+            )
         }
         for (var k = 0; k < gridSize+gridScale; k+=gridScale) {
-            drawLineBetweenPoints([base[0]+i, base[1]+k, base[2]], [base[0]+i, base[1]+k, base[2]+gridSize]);
+            drawLineBetweenPoints(
+                { x: zeroCorner.x+i, y: zeroCorner.y+k, z: zeroCorner.z }, 
+                { x: zeroCorner.x+i, y: zeroCorner.y+k, z: zeroCorner.z+gridSize }
+            )
         }
     }
-    ctx.strokeStyle = edge_color;
-    ctx.lineWidth = edge_width;
 }
 
 function drawPoint(point, i) {
-    point = rotatePoint3d(camera_rot_y, camera_rot_x, point, [camera_x, camera_y, camera_z]);
+    point = rotatePoint3d(camera.rot.y, camera.rot.x, point, camera.position)
     
-    var point_dist_cam = distToCamPlane(point[0],point[1],point[2]);
+    var point_dist_cam = distToCamPlane(point)
     
-    var projection_x = (point[0]-camera_x)*horizontal_zoom/point_dist_cam+horizontal_offset;
-    var projection_y = (point[1]+camera_y)*vertical_zoom/point_dist_cam+vertical_offset;
+    var projection_x = (point.x - camera.position.x) * camera.horizontalZoom / point_dist_cam + camera.offset.x
+    var projection_y = (point.y  +camera.position.y) * camera.verticalZoom / point_dist_cam + camera.offset.y
     
     if (point_dist_cam > 0) {
          
-        ctx.beginPath();
-        ctx.arc(projection_x, projection_y, vertex_radius/point_dist_cam/2, 0, Math.PI*2, true);
-        ctx.fill();
+        ctx.beginPath()
+        ctx.arc(projection_x, projection_y, config.vertex_radius/point_dist_cam/2, 0, Math.PI*2, true)
+        ctx.fill()
         
         if (i !== undefined) {
-            var curVertexDist = distBetPoints(projection_x,projection_y,0,canvas.width/2,canvas.height/2,0);
-            if (curVertexDist < centermostVertex.distToCenter && vertex_radius/point_dist_cam/2 > 2) {
-                centermostVertex.x = projection_x;
-                centermostVertex.y = projection_y;
-                centermostVertex.distToCenter = curVertexDist;
-                centermostVertex.index = i;
-                centermostVertex.pointRadius = vertex_radius/point_dist_cam/2;
+            var curVertexDist = distBetPoints(projection_x,projection_y,0,canvas.width/2,canvas.height/2,0)
+            if (curVertexDist < centermostVertex.distToCenter && config.vertex_radius/point_dist_cam/2 > 2) {
+                centermostVertex.x = projection_x
+                centermostVertex.y = projection_y
+                centermostVertex.distToCenter = curVertexDist
+                centermostVertex.index = i
+                centermostVertex.pointRadius = config.vertex_radius/point_dist_cam/2
             }
         }
     }
 }
 
 function drawLineBetweenPoints(edge_start, edge_end) {
-    edge_start = rotatePoint3d(camera_rot_y, camera_rot_x, edge_start, [camera_x, camera_y, camera_z]);
+    edge_start = rotatePoint3d(camera.rot.y, camera.rot.x, edge_start, camera.position)
     
-    edge_end = rotatePoint3d(camera_rot_y, camera_rot_x, edge_end, [camera_x, camera_y, camera_z]);
+    edge_end = rotatePoint3d(camera.rot.y, camera.rot.x, edge_end, camera.position)
     
-    var start_dist_cam = distToCamPlane(edge_start[0],edge_start[1],edge_start[2]);
-    var end_dist_cam = distToCamPlane(edge_end[0],edge_end[1],edge_end[2]);
+    var start_dist_cam = distToCamPlane(edge_start)
+    var end_dist_cam = distToCamPlane(edge_end)
     if (end_dist_cam > start_dist_cam) {
-        var temp = end_dist_cam;
-        end_dist_cam = start_dist_cam;
-        start_dist_cam = temp;
+        var temp = end_dist_cam
+        end_dist_cam = start_dist_cam
+        start_dist_cam = temp
         
-        temp = edge_end;
-        edge_end = edge_start;
-        edge_start = temp;
+        temp = edge_end
+        edge_end = edge_start
+        edge_start = temp
     }
     
     if (start_dist_cam > 0) {
-        
         if (end_dist_cam < 0) {	//this is not perfect at all. lines sometimes dont go all the way to the camera plane i think
             
-            var dir_vector = [edge_end[0]-edge_start[0],
-            edge_end[1]-edge_start[1],
-            edge_end[2]-edge_start[2]]	//the directional vector for the line to draw
+            var dir_vector = {
+                x: edge_end.x-edge_start.x,
+                y: edge_end.y-edge_start.y,
+                z: edge_end.z-edge_start.z
+            }	//the directional vector for the line to draw
             
-            coef = (camera_z - edge_start[2]) / dir_vector[2] - 0.01; //cut off 0.01 units in front of camera plane
+            coef = (camera.position.z - edge_start.z) / dir_vector.z - 0.01; //cut off 0.01 units in front of camera plane
             
-            var edge_end_x = edge_start[0] + coef*dir_vector[0];
-            var edge_end_y = edge_start[1] + coef*dir_vector[1];
-            var edge_end_z = edge_start[2] + coef*dir_vector[2];
-            
-        } else {
-            var edge_end_x = edge_end[0];
-            var edge_end_y = edge_end[1];
-            var edge_end_z = edge_end[2];
+            edge_end = {
+                x: edge_start.x + coef*dir_vector.x,
+                y: edge_start.y + coef*dir_vector.y,
+                z: edge_start.z + coef*dir_vector.z
+            }    
         }
         
-        end_dist_cam = distToCamPlane(edge_end_x,edge_end_y,edge_end_z);
+        end_dist_cam = distToCamPlane(edge_end)
         
-        var projection_start_x = (edge_start[0]-camera_x)*horizontal_zoom/Math.abs(start_dist_cam)+horizontal_offset;
-        var projection_start_y = (edge_start[1]+camera_y)*vertical_zoom/Math.abs(start_dist_cam)+vertical_offset;
+        var projection_start_x = (edge_start.x - camera.position.x) * camera.horizontalZoom / Math.abs(start_dist_cam) + camera.offset.x
+        var projection_start_y = (edge_start.y + camera.position.y) * camera.verticalZoom / Math.abs(start_dist_cam) + camera.offset.y
         
-        var projection_end_x = (edge_end_x-camera_x)*horizontal_zoom/Math.abs(end_dist_cam)+horizontal_offset;
-        var projection_end_y = (edge_end_y+camera_y)*vertical_zoom/Math.abs(end_dist_cam)+vertical_offset;
+        var projection_end_x = (edge_end.x - camera.position.x) * camera.horizontalZoom / Math.abs(end_dist_cam) + camera.offset.x
+        var projection_end_y = (edge_end.y + camera.position.y) * camera.verticalZoom / Math.abs(end_dist_cam) + camera.offset.y
 
-        ctx.beginPath();
-        ctx.moveTo(projection_start_x, projection_start_y);
-        ctx.lineTo(projection_end_x, projection_end_y);
-        ctx.closePath();
-        ctx.stroke();
+        ctx.beginPath()
+        ctx.moveTo(projection_start_x, projection_start_y)
+        ctx.lineTo(projection_end_x, projection_end_y)
+        ctx.closePath()
+        ctx.stroke()
     }
 }
 
 //rotates vec1 by theta (yaw), and phi (pitch) about vec2.
 function rotatePoint3d(θ, φ, vec1, vec2) {
-    return rotatePointX(φ, rotatePointY(θ, vec1, vec2), [vec2[0], -vec2[1], vec2[2]]);
+    return rotatePointX(
+        φ, 
+        rotatePointY(θ, vec1, vec2), 
+        { x: vec2.x, y: -vec2.y, z: vec2.z }
+    )
 }
 
 //rotates vec1 by theta about vec2 in the Y plane
 function rotatePointY(theta, vec1, vec2) {
-	var x0 = vec2[0] || 0;
-	var y0 = vec2[1] || 0;
-	var z0 = vec2[2] || 0;	
+	var x0 = vec2.x || 0
+	var y0 = vec2.y || 0
+	var z0 = vec2.z || 0
 	
-	var sinTheta = Math.sin(theta);
-	var cosTheta = Math.cos(theta);
+	var sinTheta = Math.sin(theta)
+	var cosTheta = Math.cos(theta)
 	
-	var x = vec1[0] - x0;
-    var z = vec1[2] - z0;
+	var x = vec1.x - x0
+    var z = vec1.z - z0
     
-	return [
-		x*cosTheta-z*sinTheta + x0,
-		vec1[1],
-		z*cosTheta+x*sinTheta + z0
-	];
+	return {
+		x: x*cosTheta-z*sinTheta + x0,
+		y: vec1.y,
+		z: z*cosTheta+x*sinTheta + z0
+    }
 }
 
 function rotatePointX(theta, vec1, vec2) {
-	var x0 = vec2[0] || 0;
-	var y0 = vec2[1] || 0;
-	var z0 = vec2[2] || 0;	
+	var x0 = vec2.x || 0
+	var y0 = vec2.y || 0
+	var z0 = vec2.z || 0
 	
 	var sinTheta = Math.sin(theta);
 	var cosTheta = Math.cos(theta);
 	
-	var y = vec1[1] - y0;
-    var z = vec1[2] - z0;
+	var y = vec1.y - y0;
+    var z = vec1.z - z0;
     
-	return [
-		vec1[0],
-		y*cosTheta-z*sinTheta + y0,
-		z*cosTheta+y*sinTheta + z0
-	];
+	return {
+		x:vec1.x,
+		y: y*cosTheta-z*sinTheta + y0,
+		z: z*cosTheta+y*sinTheta + z0
+    }
 }
 
 function rotatePointZ(theta, vec1, vec2) {
-	var x0 = vec2[0] || 0;
-	var y0 = vec2[1] || 0;
-	var z0 = vec2[2] || 0;	
+	var x0 = vec2.x || 0
+	var y0 = vec2.y || 0
+	var z0 = vec2.z || 0
 	
-	var sinTheta = Math.sin(theta);
-	var cosTheta = Math.cos(theta);
+	var sinTheta = Math.sin(theta)
+	var cosTheta = Math.cos(theta)
 	
-	var x = vec1[0] - x0;
-    var y = vec1[1] - y0;
-    
-	return [
-		x*cosTheta-y*sinTheta + x0,
-		y*cosTheta+x*sinTheta + y0,
-		vec1[2]
-	];
+	var x = vec1.x - x0
+    var y = vec1.y - y0
+
+	return {
+		x: x*cosTheta-y*sinTheta + x0,
+		y: y*cosTheta+x*sinTheta + y0,
+		z: vec1.z
+    }
 }
 
-function rotateZ(theta, x0, y0, z0) {
-	var x0 = x0 || 0;
-	var y0 = y0 || 0;
-	var z0 = z0 || 0;
+function distToCamPlane(point){
+	var xthing = point.x - camera.position.x
+	var ything = point.y - camera.position.y
+	var zthing = point.z - camera.position.z
 	
-  var sinTheta = Math.sin(theta);
-  var cosTheta = Math.cos(theta);
-  for (i = 0; i < vertices.length; i++) {
-    var x = vertices[i][0] - x0;
-    var y = vertices[i][1] - y0;
-    
-    vertices[i][0] = x*cosTheta-y*sinTheta + x0;
-    vertices[i][1] = y*cosTheta+x*sinTheta + y0;
-  }
-}
-
-function rotateY(theta, x0, y0, z0) {
-	var x0 = x0 || 0;
-	var y0 = y0 || 0;
-	var z0 = z0 || 0;	
+	var normal = [0,0,1]
 	
-  var sinTheta = Math.sin(theta);
-  var cosTheta = Math.cos(theta);
-  for (i = 0; i < vertices.length; i++) {
-    var x = vertices[i][0] - x0;
-    var z = vertices[i][2] - z0;
-    
-    vertices[i][0] = x*cosTheta-z*sinTheta + x0;
-    vertices[i][2] = z*cosTheta+x*sinTheta + z0;
-  }
-}
-
-function rotateX(theta, x0, y0, z0) {
-	var x0 = x0 || 0;
-	var y0 = y0 || 0;
-	var z0 = z0 || 0;	
+	xthing = normal[0] * xthing
+	ything = normal[1] * ything
+	zthing = normal[2] * zthing
 	
-  var sinTheta = Math.sin(theta);
-  var cosTheta = Math.cos(theta);
-  for (i = 0; i < vertices.length; i++) {
-	var y = vertices[i][1] - y0;
-	var z = vertices[i][2] - z0;
-	
-	vertices[i][1] = y*cosTheta-z*sinTheta + y0;
-	vertices[i][2] = z*cosTheta+y*sinTheta + z0;
-  }
-}
-
-function translate(x0, y0, z0) {
-	var x0 = x0 || 0;
-	var y0 = y0 || 0;
-	var z0 = z0 || 0;	
-	
-  for (i = 0; i < vertices.length; i++) {
-	vertices[i][0] = vertices[i][0] + x0;
-	vertices[i][1] = vertices[i][1] + y0;
-	vertices[i][2] = vertices[i][2] + z0;
-  }
+	if (xthing + ything + zthing > 0) {
+		return -distBetPoints(xthing, ything, zthing)
+	} else {
+		return distBetPoints(xthing, ything, zthing)
+	}
 }
 
 function distBetPoints(x1,y1,z1,x2,y2,z2) {
-	var x2 = x2 || 0;
-	var y2 = y2 || 0;
-	var z2 = z2 || 0;
+	var x2 = x2 || 0
+	var y2 = y2 || 0
+	var z2 = z2 || 0
 	return Math.sqrt(
 		(x1-x2)*(x1-x2) +
 		(y1-y2)*(y1-y2) +
 		(z1-z2)*(z1-z2)
-	);
-}
-
-function distToCamPlane(x,y,z){
-	var xthing = x - camera_x;
-	var ything = y - camera_y;
-	var zthing = z - camera_z;
-	
-	var normal = [0,0,1];
-	
-	xthing = normal[0] * xthing;
-	ything = normal[1] * ything;
-	zthing = normal[2] * zthing;
-	
-	if (xthing + ything + zthing > 0) {
-		return -1*distBetPoints(xthing, ything, zthing);
-	} else {
-		return distBetPoints(xthing, ything, zthing);
-	}
-	
-}
-
-canvas.addEventListener("mousewheel", MouseWheelHandler, false);
-	// Firefox
-canvas.addEventListener("DOMMouseScroll", MouseWheelHandler, false);
-
-function MouseWheelHandler(e) {
-    var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
-    if (shift_pressed) {
-        if (delta === 1) {
-            gridScale *= 2;
-        } else {
-            gridScale *= 0.5;
-        }
-    } else {
-        if (gridOn) {
-            pointPlaceDistance += delta*gridScale;
-        } else {
-            pointPlaceDistance += delta/10;
-        }
-    }
-
-    horizontal_zoom = Math.max(500, pointPlaceDistance * 50);	//artificial zooms
-    vertical_zoom = Math.max(500, pointPlaceDistance * 50);
-}
-
-document.onkeydown = checkKeyDown;
-document.onkeyup = checkKeyUp;
-
-var up_pressed = false;
-var down_pressed = false;
-var right_pressed = false;
-var left_pressed = false;
-var space_pressed = false;
-var fly_pressed = false;
-var descend_pressed = false;
-var shift_pressed = false;
-
-function checkKeyUp(e) {
-	e = e || window.event;
-
-    if (e.keyCode == '38' || e.keyCode == '87') {
-		up_pressed = false;
-    }
-    if (e.keyCode == '40' || e.keyCode == '83') {
-		down_pressed = false;
-    }
-    if (e.keyCode == '37' || e.keyCode == '65') {
-		left_pressed = false;
-    }
-    if (e.keyCode == '39' || e.keyCode == '68') {
-		right_pressed = false;
-    }
-	if (e.keyCode == '32') {
-		space_pressed = false;
-    }
-    if (e.keyCode == '69') {
-        fly_pressed = false;
-    }
-    if (e.keyCode == '81') {
-        descend_pressed = false;
-    }
-    if (e.keyCode == '16') {
-        shift_pressed = false;
-    }
-}
-
-function checkKeyDown(e) {
-    e = e || window.event;
-
-    if (e.keyCode == '38' || e.keyCode == '87') {
-		up_pressed = true;
-    }
-    if (e.keyCode == '40' || e.keyCode == '83') {
-		down_pressed = true;
-    }
-    if (e.keyCode == '37' || e.keyCode == '65') {
-		left_pressed = true;
-    }
-    if (e.keyCode == '39' || e.keyCode == '68') {
-		right_pressed = true;
-    }
-	if (e.keyCode == '32') {
-		space_pressed = true;
-    }
-    if (e.keyCode == '69') {
-        fly_pressed = true;
-    }
-    if (e.keyCode == '81') {
-        descend_pressed = true;
-    }
-    if (e.keyCode == '16') {
-        shift_pressed = true;
-    }
-    if (e.keyCode == '17') {
-        gridOn = !gridOn;
-    }
-}
-
-var movementSpeed = 0.06;
-
-function keyHandler() {
-	
-	var sinTheta = Math.sin(camera_rot_y);
-	var cosTheta = Math.cos(camera_rot_y);
-    
-    if (shift_pressed) {
-        if (up_pressed) {
-            camera_z -= movementSpeed;
-        }
-        if (down_pressed) {
-            camera_z += movementSpeed;
-        }
-        if (left_pressed) {
-            camera_x += movementSpeed;
-        }
-        if (right_pressed) {
-            camera_x -= movementSpeed;
-        }
-    } else {
-        if (up_pressed) {
-            camera_x -= sinTheta * movementSpeed;
-            camera_z -= cosTheta * movementSpeed;
-        }
-        if (down_pressed) {
-            camera_x += sinTheta * movementSpeed;
-            camera_z += cosTheta * movementSpeed;
-        }
-        if (left_pressed) {
-            camera_z += sinTheta * movementSpeed;
-            camera_x -= cosTheta * movementSpeed;
-        }
-        if (right_pressed) {
-            camera_z -= sinTheta * movementSpeed;
-            camera_x += cosTheta * movementSpeed;
-        }
-    }
-	
-	if (fly_pressed) {
-        camera_y += movementSpeed;
-    }
-    if (descend_pressed) {
-        camera_y -= movementSpeed;
-    }
+	)
 }
 
 function roundToNearest(numToRound, numToRoundTo) {
-    numToRoundTo = 1 / (numToRoundTo);
-    return Math.round(numToRound * numToRoundTo) / numToRoundTo;
+    numToRoundTo = 1 / (numToRoundTo)
+    return Math.round(numToRound * numToRoundTo) / numToRoundTo
 }
-
-draw();
-
-const socket = new WebSocket('ws://localhost:3001');
-// Connection opened
-socket.addEventListener('open', function (event) {
-    socket.send(JSON.stringify({msg:'something'}));
-});
-
-// Listen for messages
-socket.addEventListener('message', function (event) {
-    console.log('Message from server ', JSON.parse(event.data));
-});

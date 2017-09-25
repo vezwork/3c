@@ -35,14 +35,22 @@ class World {
         this.edges = []
     }
 
-    placePoint({x, y, z}) {
-
+    placePoint(point) 
+    {
+        this.vertices.push(point)
     }
 
-    connectPoints(point1, point2) {
+    connectPoints(edge) 
+    {
+        this.edges.push(edge)
+    }
 
+    deletePoint(pointIndex) 
+    {
+        this.vertices.splice(pointIndex, 1, {})
     }
 }
+const world = new World()
 
 
 //=====================================================================
@@ -51,16 +59,35 @@ class World {
 
 const WebSocket = require('ws')
 
-
 const wss = new WebSocket.Server({ port: 3001 })
 
-wss.on('connection', function connection(ws) 
+const actionHandlers = {
+    place: data => world.placePoint(data.point),
+    connect: data => world.connectPoints(data.edge),
+    delete: data => world.deletePoint(data.pointIndex)
+}
+
+wss.on('connection', function connection(ws)
 {
-  ws.on('message', function incoming(message) 
-  {
-    console.log('received: %s', JSON.parse(message))
-  })
+    ws.on('message', function incoming(message) 
+    {
+        const data = JSON.parse(message)
+        console.log('message recieved', data)
+        actionHandlers[data.action](data)
+        console.log('new world: ', world)
 
-  ws.send({msg: 'something'})
-});
+        ws.send(JSON.stringify(world))
+    })
 
+    ws.send(JSON.stringify(world))
+})
+
+function worldUpdateLoop() {
+    wss.clients.forEach(function each(client) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(world))
+        }
+    })
+}
+
+setInterval(worldUpdateLoop, 100)
