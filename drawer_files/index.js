@@ -7,7 +7,9 @@ const ctx = canvas.getContext('2d')
 
 const world = new SocketWorld()
 const input = new Input(canvas)
-input.tryMouseLock(true)
+input.tryMouseLock(false)
+
+const projectedVertices = []
 
 const camera = {
     horizontalZoom: 500,	//artificial zooms
@@ -47,6 +49,13 @@ const selectorCircle = {
     radius: 100,
     opacity: 1
 }
+const selection = {
+    start: { x: 0, y: 0 },
+    end: { x: 0, y: 0 }
+}
+let copyPoints = []
+let copyEdges = []
+
 let dragVertex = null
 let pointPlaceDistance = 5
 let movementSpeed = 0.06
@@ -66,43 +75,90 @@ engineLoop()
 
 function handleControls() 
 {
-    if (input.buttonPressed('right')) {
-        if (centermostVertex.pointRadius > 2) {
-            dragVertex = centermostVertex.index
-        }
-    }
-    if (input.buttonPressed('middle')) {
-        world.deletePoint(centermostVertex.index)
-    }
-    if (input.buttonPressed('left')) {
-        var cx = pointPlaceDistance * Math.sin(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x);
-        var cy = pointPlaceDistance * Math.cos(Math.PI*2/4+camera.rot.x);
-        var cz = pointPlaceDistance * Math.cos(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x);
+    const cx = pointPlaceDistance * Math.sin(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x)
+    const cy = pointPlaceDistance * Math.cos(Math.PI*2/4+camera.rot.x)
+    const cz = pointPlaceDistance * Math.cos(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x)
+    let aimingPoint
 
-        if (gridOn) {
-            world.placePoint({
-                x: roundToNearest(camera.position.x+cx, gridScale),
-                y: roundToNearest(-camera.position.y+cy, gridScale),
-                z: roundToNearest(camera.position.z+cz, gridScale)
-            })
-        } else {
-            world.placePoint({
-                x: camera.position.x+cx, gridScale,
-                y: -camera.position.y+cy, gridScale,
-                z: camera.position.z+cz, gridScale
-            })
+    if (gridOn) {
+        aimingPoint = {
+            x: roundToNearest(camera.position.x+cx, gridScale),
+            y: roundToNearest(-camera.position.y+cy, gridScale),
+            z: roundToNearest(camera.position.z+cz, gridScale)
         }
-    }
-    if (input.buttonReleased('right')) {
-        if (dragVertex && centermostVertex.pointRadius > 2) {
-            world.connectPoints([dragVertex, centermostVertex.index])
-        } 
-        dragVertex = null;
+    } else {
+        aimingPoint = {
+            x: camera.position.x+cx, gridScale,
+            y: -camera.position.y+cy, gridScale,
+            z: camera.position.z+cz, gridScale
+        }
     }
 
     if (input.mouse.locked) {
+        if (input.buttonPressed('right')) {
+            if (centermostVertex.pointRadius > 2) {
+                dragVertex = centermostVertex.index
+            }
+        }
+        if (input.buttonPressed('middle')) {
+            world.deletePoint(centermostVertex.index)
+        }
+        if (input.buttonPressed('left')) {
+            world.placePoint(aimingPoint)
+        }
+        if (input.buttonReleased('right')) {
+            if (dragVertex && centermostVertex.pointRadius > 2) {
+                world.connectPoints([dragVertex, centermostVertex.index])
+            } 
+            dragVertex = null;
+        }
+
         camera.rot.x -= input.mouse.move.y/300
         camera.rot.y -= input.mouse.move.x/300
+
+    } else {
+        if (input.buttonPressed('left')) {
+            selection.start = { x: input.mouse.x, y: input.mouse.y }
+            selection.end = { x: input.mouse.x, y: input.mouse.y }
+        } else if (input.buttonDown('left')) {
+            selection.end = { x: input.mouse.x, y: input.mouse.y }
+        }
+
+        ctx.rect(selection.start.x, selection.start.y, selection.end.x - selection.start.x, selection.end.y - selection.start.y)
+        const selectedPoints = projectedVertices.filter(v => ctx.isPointInPath(v.x, v.y))
+
+        if (input.keyDown('control') && input.keyPressed('c')) {
+            copyPoints = selectedPoints.map(p => ({ 
+                relx: world.vertices[p.index].x - aimingPoint.x,
+                rely: world.vertices[p.index].y - aimingPoint.y,
+                relz: world.vertices[p.index].z - aimingPoint.z,
+                index: p.index
+            }))
+            copyEdges = []
+            world.edges.forEach(e => {
+                let a1, a2
+                copyPoints.every((p, i) => {
+                    if (p.index === e[0])
+                        a1 = i
+                    if (p.index === e[1])
+                        a2 = i
+                    if (a1 && a2)
+                        return false
+                    return true
+                })
+                if (a1 !== undefined && a2 !== undefined)
+                    copyEdges.push([a1, a2])
+            })
+        } else if (input.keyDown('control') && input.keyPressed('v')) {
+            world.addSubGraph({
+                points: copyPoints.map(p => ({
+                    x: p.relx + aimingPoint.x,
+                    y: p.rely + aimingPoint.y,
+                    z: p.relz + aimingPoint.z
+                })),
+                edges: copyEdges
+            })
+        }
     }
 
     if (camera.rot.x > Math.PI/2) {
@@ -283,6 +339,19 @@ function drawUI()
         ctx.strokeStyle = 'red'
         ctx.strokeText(gridScale.toPrecision(5), canvas.width/2+3, canvas.height/2+9)
     }
+
+    //draw selection box
+    ctx.setLineDash([10, 10])
+    ctx.rect(selection.start.x, selection.start.y, selection.end.x - selection.start.x, selection.end.y - selection.start.y)
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    projectedVertices.forEach((v, i) => {
+        if (ctx.isPointInPath(v.x, v.y)) {
+            ctx.fillStyle = 'red'
+            ctx.fillRect(v.x, v.y, 5, 5)
+        }
+    })
 }
 
 function drawGrid(point, gridSize, gridScale) {
@@ -337,6 +406,13 @@ function drawPoint(point, i) {
                 centermostVertex.distToCenter = curVertexDist
                 centermostVertex.index = i
                 centermostVertex.pointRadius = config.vertex_radius/point_dist_cam/2
+            }
+
+            projectedVertices[i] = { 
+                x: projection_x, 
+                y: projection_y, 
+                pointRadius: config.vertex_radius/point_dist_cam/2,
+                index: i
             }
         }
     }

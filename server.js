@@ -39,12 +39,12 @@ class World {
 
     placePoint(point) 
     {
-        this.vertices.push(point)
+        return this.vertices.push(point) - 1
     }
 
     connectPoints(edge) 
     {
-        this.edges.push(edge)
+        return this.edges.push(edge) - 1
     }
 
     deletePoint(pointIndex) 
@@ -66,7 +66,15 @@ const wss = new WebSocket.Server({ server })
 const actionHandlers = {
     place: data => world.placePoint(data.point),
     connect: data => world.connectPoints(data.edge),
-    delete: data => world.deletePoint(data.pointIndex)
+    delete: data => world.deletePoint(data.pointIndex),
+    subgraph: data => {
+        const pointIndices = data.points.map(p => 
+            world.placePoint(p)
+        )
+        data.edges.forEach(e => 
+            world.connectPoints([pointIndices[e[0]], pointIndices[e[1]]])
+        )
+    }
 }
 
 wss.on('connection', function connection(ws)
@@ -76,7 +84,6 @@ wss.on('connection', function connection(ws)
         const data = JSON.parse(message)
         console.log('message recieved', data)
         actionHandlers[data.action](data)
-        console.log('new world: ', world)
 
         ws.send(JSON.stringify(world))
     })

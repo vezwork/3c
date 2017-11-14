@@ -22,7 +22,7 @@ class SocketWorld
     {
         this._socket.send(JSON.stringify({
             action: 'place',
-            point: point
+            point
         }))
     }
 
@@ -30,7 +30,7 @@ class SocketWorld
     {
         this._socket.send(JSON.stringify({
             action: 'connect',
-            edge: edge
+            edge
         }))
     }
 
@@ -38,7 +38,15 @@ class SocketWorld
     {
         this._socket.send(JSON.stringify({
             action: 'delete',
-            pointIndex: pointIndex
+            pointIndex
+        }))
+    }
+
+    addSubGraph({ points=[], edges=[] }) {
+        this._socket.send(JSON.stringify({
+            action: 'subgraph',
+            points,
+            edges
         }))
     }
 }
@@ -60,24 +68,33 @@ class LocalWorld
     placePoint(point) 
     {
         this.vertices.push(point)
-        localStorage.setItem('world', JSON.stringify({
-            vertices: this.vertices,
-            edges: this.edges
-        }));
+        this._save()
     }
 
     connectPoints(edge) 
     {
         this.edges.push(edge)
-        localStorage.setItem('world', JSON.stringify({
-            vertices: this.vertices,
-            edges: this.edges
-        }));
+        this._save()
     }
 
     deletePoint(pointIndex) 
     {
         this.vertices.splice(pointIndex, 1, {})
+        this._save()
+    }
+
+    addSubGraph({ points=[], edges=[] }) {
+        const pointIndices = points.map(p => 
+            this.vertices.push(p) - 1
+        )
+        console.log(pointIndices, edges)
+        edges.forEach(e => 
+            this.edges.push([pointIndices[e[0]], pointIndices[e[1]]])
+        )
+        this._save()
+    }
+
+    _save() {
         localStorage.setItem('world', JSON.stringify({
             vertices: this.vertices,
             edges: this.edges
