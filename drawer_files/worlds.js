@@ -2,8 +2,7 @@ class SocketWorld
 {
     constructor() 
     {
-        this.vertices = []
-        this.edges = []
+        this.points = []
 
         this._socket = new WebSocket(document.getElementById('data-port').innerHTML)
 
@@ -12,9 +11,8 @@ class SocketWorld
         })
         
         this._socket.addEventListener('message', event => {
-            const { vertices, edges } = JSON.parse(event.data)
-            this.vertices = vertices
-            this.edges = edges
+            const { points } = JSON.parse(event.data)
+            this.points = points
         })
     }
 
@@ -41,63 +39,100 @@ class SocketWorld
             pointIndex
         }))
     }
-
-    addSubGraph({ points=[], edges=[] }) {
-        this._socket.send(JSON.stringify({
-            action: 'subgraph',
-            points,
-            edges
-        }))
-    }
 }
 
 class LocalWorld 
 {
     constructor() 
     {
-        this.vertices = []
-        this.edges = []
+        this.points = new Map()
 
-        var storedData = JSON.parse(localStorage.getItem("world"));
+        this._idCounter = 0
+
+        const storedData = JSON.parse(localStorage.getItem("world"), (k, v) => (k === 'links') ? new Set(v) : v)
         if (storedData) {
-            this.vertices = storedData.vertices,
-            this.edges = storedData.edges
+            this.points = new Map(storedData.points)
+            this._idCounter = storedData._idCounter
         }
     }
 
     placePoint(point) 
     {
-        this.vertices.push(point)
+        if (Array.isArray(point)) {
+            point.forEach(p => {
+                this.points.set(this._idCounter, p)
+                if (!point.links)
+                    point.links = new Set()
+                this._idCounter++
+            })
+        } else {
+            this.points.set(this._idCounter, point)
+            if (!point.links)
+                point.links = new Set()
+            this._idCounter++
+        }
+        
         this._save()
     }
 
     connectPoints(edge) 
     {
-        this.edges.push(edge)
+        if (Array.isArray(edge[0])) {
+            edge.forEach(e => {
+                this.points.get(e[0]).links.add(e[1])
+                this.points.get(e[1]).links.add(e[0])
+            })
+        } else {
+            this.points.get(edge[0]).links.add(edge[1])
+            this.points.get(edge[1]).links.add(edge[0])
+        }
         this._save()
     }
 
-    deletePoint(pointIndex) 
+    deletePoint(pointId) 
     {
-        this.vertices.splice(pointIndex, 1, {})
+        console.log('deleting', pointId)
+        if (Array.isArray(pointId)) {
+            pointId.forEach(id => {
+                this.points.get(id).links.forEach(oid => this.points.get(oid).links.delete(id))
+                this.points.delete(id)
+            })
+        } else {
+            this.points.get(pointId).links.forEach(oid => this.points.get(oid).links.delete(pointId))
+            this.points.delete(pointId)
+        }
         this._save()
     }
 
-    addSubGraph({ points=[], edges=[] }) {
-        const pointIndices = points.map(p => 
-            this.vertices.push(p) - 1
-        )
-        console.log(pointIndices, edges)
-        edges.forEach(e => 
-            this.edges.push([pointIndices[e[0]], pointIndices[e[1]]])
-        )
+    integrateOtherWorld(points, newOrigin={x:0,y:0,z:0}) 
+    {
+        const newIds = new Map()
+
+        points.forEach((p, id) => {
+            newIds.set(id, this._idCounter)
+            this._idCounter++
+        })
+        points.forEach((p, id) => {
+            const newLinks = new Set()
+            p.links.forEach(l => {
+                const newId = newIds.get(l)
+                if (newId) newLinks.add(newId)
+            })
+            this.points.set(newIds.get(id), p)
+        })
         this._save()
     }
 
     _save() {
-        localStorage.setItem('world', JSON.stringify({
-            vertices: this.vertices,
-            edges: this.edges
-        }));
+        localStorage.setItem(
+            'world', 
+            JSON.stringify(
+                { 
+                    points: [...this.points],
+                    _idCounter: this._idCounter 
+                }, 
+                (k,v) =>  (k === 'links') ? [...v] : v
+            )
+        )
     }
 }
