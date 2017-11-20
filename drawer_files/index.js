@@ -50,6 +50,11 @@ const selection = {
     start: { x: 0, y: 0 },
     end: { x: 0, y: 0 }
 }
+const copy = {
+    points: new Map(),
+    origin: { x: 0, y: 0, z: 0 },
+    rot: { x: 0, y: 0 }
+}
 let copyPoints = new Map()
 let copyOrigin = null
 
@@ -118,23 +123,34 @@ function handleControls()
     if (input.keyDown('control')) {
         
         if (input.keyPressed('c') || input.keyPressed('x')) {
-            copyPoints.clear()
+            copy.points.clear()
             ctx.rect(selection.start.x, selection.start.y, selection.end.x - selection.start.x, selection.end.y - selection.start.y)
             projectedPoints.forEach((p, id) => {
                 if (ctx.isPointInPath(p.x, p.y)) {
                     const newPoint = Object.assign({}, world.points.get(id))
                     newPoint.links = new Set(newPoint.links)
-                    copyPoints.set(id, newPoint)
+                    copy.points.set(id, newPoint)
                 }
             })
-            copyOrigin = aimingPoint
+            copy.origin = aimingPoint
+            copy.rot = Object.assign({}, camera.rot)
 
             if (input.keyPressed('x')) {
                 world.deletePoint([...copyPoints.keys()])
             }
 
         } else if (input.keyPressed('v')) {
-            world.integrateOtherWorld(copyPoints)
+            const pastePoints = new Map()
+            copy.points.forEach((p, id) => {
+                const rotp = rotatePoint3d(copy.rot.y - camera.rot.y, 0, p, copy.origin)
+                pastePoints.set(id, {
+                    x: (aimingPoint.x - copy.origin.x) + rotp.x,
+                    y: (aimingPoint.y - copy.origin.y) + rotp.y,
+                    z: (aimingPoint.z - copy.origin.z) + rotp.z,
+                    links: new Set(p.links)
+                })
+            })
+            world.integrateOtherWorld(pastePoints)
         }
     }
 

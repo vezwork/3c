@@ -91,7 +91,6 @@ class LocalWorld
 
     deletePoint(pointId) 
     {
-        console.log('deleting', pointId)
         if (Array.isArray(pointId)) {
             pointId.forEach(id => {
                 this.points.get(id).links.forEach(oid => this.points.get(oid).links.delete(id))
@@ -118,6 +117,7 @@ class LocalWorld
                 const newId = newIds.get(l)
                 if (newId) newLinks.add(newId)
             })
+            p.links = newLinks
             this.points.set(newIds.get(id), p)
         })
         this._save()

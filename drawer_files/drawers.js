@@ -1,7 +1,7 @@
 function getAimingPoint() {
-    const cx = pointPlaceDistance * Math.sin(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x)
-    const cy = pointPlaceDistance * Math.cos(Math.PI*2/4+camera.rot.x)
-    const cz = pointPlaceDistance * Math.cos(camera.rot.y+Math.PI) * Math.sin(Math.PI*2/4+camera.rot.x)
+    const cx = pointPlaceDistance * Math.sin(camera.rot.y+Math.PI) * Math.sin(Math.PI/2+camera.rot.x)
+    const cy = pointPlaceDistance * Math.cos(Math.PI/2+camera.rot.x)
+    const cz = pointPlaceDistance * Math.cos(camera.rot.y+Math.PI) * Math.sin(Math.PI/2+camera.rot.x)
 
     if (gridOn) {
         return {
