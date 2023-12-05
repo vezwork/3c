@@ -1,37 +1,33 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <title>Perspective Canvas 3d!</title>
-    </head>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Perspective Canvas 3d!</title>
+  </head>
 
-    <body>
-        <canvas id="canvas" width="1200" height="600">
-        Your browser doesn't support the canvas :/
-        </canvas>
-        <div class="canvas-container">
-        </div>
-        <canvas id="c" height=360 width=1000 tabindex='1'></canvas>
-        <!--
-        WASD or arrow keys to move<br>
-        E and Q to move up and down<br>
-        G to toggle grid<br>
-        LEFT CLICK to place a point<br>
-        RIGHT CLICK DRAG to connect two points<br>
-        MIDDLE CLICK to delete point<br>
-        scroll to change point placement distance<br>
-        SHIFT + scroll to change grid size<br>
-        SHIFT + move to move on a grid
-        -->
-        
-        
+  <body>
+    <canvas id="canvas" width="1200" height="600">
+      Your browser doesn't support the canvas :/
+    </canvas>
+    <div class="canvas-container"></div>
+    <canvas id="c" height="360" width="1000" tabindex="1"></canvas>
 
-        <script src="./drawer_files/drawers.js"></script>
-        <script src="./drawer_files/worlds.js"></script>
-        <script src="./drawer_files/input.js"></script>
-        <script src="./drawer_files/index.js"></script>
+    WASD or arrow keys to move<br />
+    E and Q to move up and down<br />
+    G to toggle grid<br />
+    LEFT CLICK to place a point<br />
+    RIGHT CLICK DRAG to connect two points<br />
+    MIDDLE CLICK to delete point<br />
+    scroll to change point placement distance<br />
+    SHIFT + scroll to change grid size<br />
+    SHIFT + move to move on a grid
 
-        <script src='./spin/js/places.js'></script>
-        <script src="./spin/js/index.js"></script>
-    </body>
+    <script src="./drawer_files/drawers.js"></script>
+    <script src="./drawer_files/worlds.js"></script>
+    <script src="./drawer_files/input.js"></script>
+    <script src="./drawer_files/index.js"></script>
+
+    <script src="./spin/js/places.js"></script>
+    <script src="./spin/js/index.js"></script>
+  </body>
 </html>
