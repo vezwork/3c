@@ -1,0 +1,231 @@
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+
+interface Vect2D {
+  x : number;
+  y : number;
+}
+interface Vect3D {
+  x : number;
+  y : number;
+  z : number;
+}
+interface Planet {
+  radius : number;
+  origin : Vect3D;
+  rot :    Vect2D;
+}
+interface Circle {
+  radius : number;
+  coord :  Vect3D;
+}
+
+function drawPlanet(planet:Planet):void {
+  ctx.beginPath();
+  ctx.arc(planet.origin.x, //x origin
+          planet.origin.y, //y origin
+          planet.radius,   //radius
+          0, Math.PI*2, false);
+  ctx.fillStyle = "rgba(200, 200, 200, 1)";
+  ctx.fill();
+}
+
+function projectOnPlanet(planet:Planet, coord: Vect3D):Vect3D {
+  const rad = planet.radius + coord.z;
+  
+  const x = coord.x + planet.rot.x;
+  const y = coord.y;
+  const cx = rad * Math.sin(x) * Math.sin(y);
+  const icy = rad * Math.cos(y);
+  const icz = rad * Math.cos(x) * Math.sin(y);
+  //do a cartesian rotation on the x axis for planet y rot
+  let cy = icy * Math.cos(planet.rot.y) + icz *  Math.sin(planet.rot.y);
+  let cz = icz * Math.cos(planet.rot.y) - icy *  Math.sin(planet.rot.y);
+  return { x: cx, y: cy, z: cz };
+}
+
+function projectOnPlanetZInvert(planet:Planet, coord: Vect3D):Vect3D {
+  var { x, y, z } = projectOnPlanet(planet, coord);
+  const rad = planet.radius + coord.z;
+   
+  if (z < 0) { 
+    const r = Math.sqrt(x**2 + y**2);
+    const r_ = 2 * rad - r;
+    x = (x/r) * r_;
+    y = (y/r) * r_;
+  }
+  
+  return { x, y, z };
+}
+
+function drawPathOnPlanet(planet:Planet, coords:Vect3D[]):void {
+  if (coords.length > 1) {
+    ctx.beginPath();
+    let next = projectOnPlanetZInvert(planet, coords[0]);
+    let resolve = undefined;
+    let resolveAtEnd = undefined;
+    coords.forEach((coord, i)=>{
+
+      var cur = next;
+      if (coords[i+1] !== undefined)
+        next = projectOnPlanetZInvert(planet, coords[i+1]);
+      else
+        next = projectOnPlanetZInvert(planet, coords[0]);
+      
+      //do stuff here
+      if (cur.z >= 0 && next.z >= 0) { //inside
+        ctx.lineTo(planet.origin.x + cur.x, planet.origin.y + cur.y);
+      } else if (cur.z >= 0 && next.z <= 0) { //move out
+        ctx.lineTo(planet.origin.x + cur.x, planet.origin.y + cur.y);
+        ctx.lineTo(planet.origin.x + next.x, planet.origin.y + next.y);
+        resolve = next;
+      } else if (cur.z <= 0 && next.z >= 0) { //move in
+        if (resolve === undefined) resolveAtEnd = cur;
+        else {
+          //draw point between cur and resolve
+          const avg = {
+            x: (cur.x + resolve.x) / 2,
+            y: (cur.y + resolve.y) / 2
+          };
+          const r = Math.sqrt(avg.x ** 2 + avg.y ** 2);
+          const r_ = 2 * planet.radius;
+          avg.x = avg.x / r * r_;
+          avg.y = avg.y / r * r_;
+          ctx.lineTo(planet.origin.x + avg.x, planet.origin.y + avg.y);
+        }
+        ctx.lineTo(planet.origin.x + cur.x, planet.origin.y + cur.y);
+      }
+    });
+    if (resolveAtEnd !== undefined) {
+      const avg = {
+            x: (resolveAtEnd.x + resolve.x) / 2,
+            y: (resolveAtEnd.y + resolve.y) / 2
+          };
+          const r = Math.sqrt(avg.x ** 2 + avg.y ** 2);
+          const r_ = 2 * planet.radius;
+          avg.x = avg.x / r * r_;
+          avg.y = avg.y / r * r_;
+          ctx.lineTo(planet.origin.x + avg.x, planet.origin.y + avg.y);
+    }
+
+    ctx.closePath();
+    ctx.fillStyle = "white";
+    ctx.fill();
+  }
+}
+
+function drawCircleOnPlanet(planet:Planet, circle:Circle):void {
+  var {x,y,z} = projectOnPlanet(planet, circle.coord);
+  
+  if (z > 0) { 
+    ctx.beginPath();
+    ctx.ellipse(planet.origin.x + x, //x origin
+                planet.origin.y + y, //y origin
+                Math.sin(Math.PI/2 * Math.abs((rad - Math.sqrt(x**2 + y**2)) / rad)) * circle.radius, //x radius
+                circle.radius, //y radius
+                Math.atan2(y,x),                      //rot
+                0, Math.PI*2, false);   //how to draw a full ellipse.
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+ctx.strokeStyle="black";
+ctx.fillStyle="white";
+
+const globe_img = document.getElementById("source");
+
+let planet:Planet = {
+  radius: 250,
+  origin: { x: 450, y: 280, z: 0 },
+  rot: { x: 0, y: 0 }
+};
+let mini:Planet = {
+  radius: 10,
+  origin: { x: 450, y: 280, z: 0 },
+  rot: { x: 0, y: 0 }
+};
+let mini2:Planet = {
+  radius: 1,
+  origin: { x: 450, y: 280, z: 0 },
+  rot: { x: 0, y: 0 }
+};
+
+const path = [];
+var togglePath = true;
+
+var mapWidth = globe_img.width * 3,
+    mapHeight = globe_img.height * 3;
+
+var maskCanvas = document.createElement("canvas");
+// Ensure same dimensions
+maskCanvas.width = c.width;
+maskCanvas.height = c.height;
+var maskCtx = maskCanvas.getContext("2d");
+maskCtx.fillStyle = "SeaGreen";
+maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+maskCtx.globalCompositeOperation = "xor";
+maskCtx.beginPath();
+maskCtx.arc(
+  450, //x origin
+  280, //y origin
+  249, //radius
+  0,
+  Math.PI * 2,
+  false
+);
+maskCtx.fill();
+
+function draw() : void {
+  ctx.fillStyle="#42bff4";
+  ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle="white";
+  
+  //stitching underlay
+  ctx.drawImage(globe_img, 450+mapWidth/2*planet.rot.x/Math.PI, 280+mapHeight/2*planet.rot.y/Math.PI-mapHeight/4, mapWidth, mapHeight/2);
+  
+  drawPlanet(planet);
+  drawPlanet(mini);
+  drawPlanet(mini2);
+  ctx.fillText(planet.rot.x + " : " + planet.rot.y, 10, 10);
+  if (togglePath) {
+    drawPathOnPlanet(planet,path);
+    drawPathOnPlanet(planet,americas_path);
+  }
+  //planet.rot.x += 0.01;
+  //planet.rot.y += 0.001;
+  ctx.drawImage(maskCanvas, 0, 0);
+  requestAnimationFrame(draw);
+}
+
+draw();
+
+const offsetPrev = {x:0, y:0}
+
+c.addEventListener("mousemove", e=>{
+  if (e.altKey) {
+    planet.rot.x -= (offsetPrev.x - e.offsetX)*0.002;
+    planet.rot.y -= (offsetPrev.y - e.offsetY)*0.002;
+  }
+  offsetPrev.x = e.offsetX;
+  offsetPrev.y = e.offsetY;
+})
+
+c.addEventListener("keydown", e=>{
+  if (e.key ===  "z")
+    togglePath = !togglePath;
+  if (e.key === "p")
+    console.log(JSON.stringify(path));
+  if (e.key === "q")
+    mapHeight+=200;
+  if (e.key === "a")
+    mapHeight-=200;
+  if (e.key === "w")
+    mapWidth+=200;
+  if (e.key === "s")
+    mapWidth-=200;
+});
+
+c.addEventListener("mousedown", _=>{
+  path.push({ x: -planet.rot.x, y: Math.PI/2+planet.rot.y, z: 0 });
+});

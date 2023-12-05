@@ -37,7 +37,9 @@ class Input {
         el.addEventListener('contextmenu', e=>e.preventDefault())
         //add callbacks
         const mouseWheelHandler = e => {
-            this.scroll += Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)))
+            e.preventDefault();
+            this.scroll += Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
+            return false;
         }
         el.addEventListener("mousewheel", mouseWheelHandler)
         el.addEventListener("DOMMouseScroll", mouseWheelHandler)

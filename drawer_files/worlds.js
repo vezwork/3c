@@ -49,6 +49,8 @@ class LocalWorld
 
         this._idCounter = 0
 
+        window.addEventListener('unload', _=>this._save())
+
         const storedData = JSON.parse(localStorage.getItem("world"), (k, v) => (k === 'links') ? new Set(v) : v)
         if (storedData) {
             this.points = new Map(storedData.points)
@@ -59,48 +61,33 @@ class LocalWorld
     placePoint(point) 
     {
         if (Array.isArray(point)) {
-            point.forEach(p => {
-                this.points.set(this._idCounter, p)
-                if (!point.links)
-                    point.links = new Set()
-                this._idCounter++
-            })
+            point.forEach(p => this.placePoint(p))
         } else {
             this.points.set(this._idCounter, point)
             if (!point.links)
                 point.links = new Set()
             this._idCounter++
         }
-        
-        this._save()
     }
 
     connectPoints(edge) 
     {
         if (Array.isArray(edge[0])) {
-            edge.forEach(e => {
-                this.points.get(e[0]).links.add(e[1])
-                this.points.get(e[1]).links.add(e[0])
-            })
+            edge.forEach(e => this.connectPoints(e))
         } else {
             this.points.get(edge[0]).links.add(edge[1])
             this.points.get(edge[1]).links.add(edge[0])
         }
-        this._save()
     }
 
     deletePoint(pointId) 
     {
         if (Array.isArray(pointId)) {
-            pointId.forEach(id => {
-                this.points.get(id).links.forEach(oid => this.points.get(oid).links.delete(id))
-                this.points.delete(id)
-            })
+            pointId.forEach(id => this.deletePoint(id))
         } else {
             this.points.get(pointId).links.forEach(oid => this.points.get(oid).links.delete(pointId))
             this.points.delete(pointId)
         }
-        this._save()
     }
 
     integrateOtherWorld(points, newOrigin={x:0,y:0,z:0}) 
@@ -120,7 +107,6 @@ class LocalWorld
             p.links = newLinks
             this.points.set(newIds.get(id), p)
         })
-        this._save()
     }
 
     _save() {
